@@ -1,4 +1,4 @@
-# chat/chat_history.py
+# memory/chat_history.py
 import os
 import logging
 from pyexpat.errors import messages
@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-MAX_HISTORY_TURNS = 10
+MAX_HISTORY_TURNS = 20
 
 
 class ChatHistory:
