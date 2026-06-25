@@ -1,2 +1,3 @@
 .env
 bill_env/
+__pycache__/
