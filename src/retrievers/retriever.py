@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from retrievers.router import route_query
+# from retrievers.router import route_query
 from ingestion.embedder import get_embedder
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,8 @@ class Retriever:
         Direct retrieval.
         """
 
-        clean_query = self.clean_query_for_retrieval(query)
+        # clean_query = self.clean_query_for_retrieval(query)
+        clean_query = query.strip()
 
         logger.info(f"Single Collection Retrieval")
         logger.info(f"Query: {clean_query}")
@@ -196,46 +197,26 @@ class Retriever:
     def retrieve_multi_collection(
         self,
         query: str,
-        top_k: int = 10,
-        fallback_collections: Optional[List[str]] = None
+        top_k: int = 10
     ) -> List[Dict[str, Any]]:
-        """
-        Use when multiple collections exist.
 
-        Query Router -> Collection Selection -> Retrieval
-        """
+        # clean_query = self.clean_query_for_retrieval(query)
+        clean_query = query.strip()
 
-        clean_query = self.clean_query_for_retrieval(query)
-
-        logger.info(f"Multi Collection Retrieval")
+        logger.info("Multi Collection Retrieval")
         logger.info(f"Query: {clean_query}")
 
-        collections = route_query(clean_query)
-
-        if not collections or "all" in collections:
-
-            logger.warning(
-                "Router returned empty/all. "
-                "Using fallback collections."
-            )
-
-            collections = fallback_collections or []
-
-        if not collections:
-
-            logger.warning(
-                "No collections available after routing."
-            )
-
+        if len(clean_query.split()) < 2:
+            logger.warning("Query too vague")
             return []
 
-        logger.info(
-            f"Searching collections: {collections}"
-        )
+        # load all indexes if not loaded
+        if not self.indexes:
+            self.load_all_indexes()
 
         all_results = []
 
-        for collection_name in collections:
+        for collection_name in self.indexes.keys():
 
             hits = self.search_collection(
                 query=clean_query,
@@ -253,8 +234,8 @@ class Retriever:
         final = all_results[:top_k]
 
         logger.info(
-            f"Retrieved {len(final)} chunks "
-            f"across {len(collections)} collections"
+            f"Retrieved {len(final)} chunks across "
+            f"{len(self.indexes)} collections"
         )
 
         return final

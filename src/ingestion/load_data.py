@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 class MongoDBLoader:
 
 
+
     def __init__(self, connection_string: str, database_name: str):
         self.client = MongoClient(connection_string)
         self.db = self.client[database_name]
@@ -27,54 +28,139 @@ class MongoDBLoader:
         text = str(text)
         text = re.sub(r"\s+", " ", text)
         return text.strip()
+    
+
+    # important method if i want to format multiple collections and return a single flat list of documents
+
+    # def format_document_for_rag(
+    #     self,
+    #     document: Dict[str, Any],
+    #     collection_name: str
+    # ) -> Optional[Dict[str, Any]]:
+
+    #     text_parts = []
+
+    #     for key, value in document.items():
+
+    #         if key == "_id":
+    #             continue
+
+    #         if value is None:
+    #             continue
+
+    #         if isinstance(value, str):
+    #             cleaned = self.clean_text(value)
+    #             if cleaned:
+    #                 text_parts.append(f"{key}: {cleaned}")
+
+    #         elif isinstance(value, (int, float, bool)):
+    #             text_parts.append(f"{key}: {value}")
+
+    #         elif isinstance(value, list):
+    #             values = [str(v) for v in value if v]
+    #             if values:
+    #                 text_parts.append(f"{key}: {', '.join(values)}")
+
+    #         elif isinstance(value, dict):
+    #             values = [f"{k}: {v}" for k, v in value.items()]
+    #             if values:
+    #                 text_parts.append(f"{key}: {', '.join(values)}")
+
+    #     combined_text = "\n".join(text_parts).strip()
+
+    #     if not combined_text:
+    #         return None
+
+    #     return {
+    #         "id": str(document.get("_id", "")),
+    #         "text": combined_text,
+    #         "metadata": {
+    #             "source": "mongodb",
+    #             "database": self.database_name,
+    #             "collection": collection_name,
+    #             "document_id": str(document.get("_id", "")),
+    #         }
+    #     }
+
+    def flatten_document(
+    self,
+    data: Any,
+    prefix: str = ""
+) -> List[str]:
+        
+        output = []
+
+        if isinstance(data, dict):
+
+            for key, value in data.items():
+
+                if key == "_id":
+                    continue
+
+                new_prefix = f"{prefix}.{key}" if prefix else key
+
+                output.extend(
+                    self.flatten_document(
+                        value,
+                        new_prefix
+                    )
+                )
+
+        elif isinstance(data, list):
+
+            values = []
+
+            for item in data:
+
+                if isinstance(item, (dict, list)):
+                    output.extend(
+                        self.flatten_document(
+                            item,
+                            prefix
+                        )
+                    )
+                else:
+                    values.append(str(item))
+
+            if values:
+                output.append(
+                    f"{prefix}: {', '.join(values)}"
+                )
+
+        else:
+
+            value = self.clean_text(data)
+
+            if value:
+                output.append(
+                    f"{prefix}: {value}"
+                )
+
+        return output
 
     def format_document_for_rag(
-        self,
-        document: Dict[str, Any],
-        collection_name: str
-    ) -> Optional[Dict[str, Any]]:
+    self,
+    document: Dict[str, Any],
+    collection_name: str
+):
+         
+    
+    
+        flattened = self.flatten_document(document)
 
-        text_parts = []
-
-        for key, value in document.items():
-
-            if key == "_id":
-                continue
-
-            if value is None:
-                continue
-
-            if isinstance(value, str):
-                cleaned = self.clean_text(value)
-                if cleaned:
-                    text_parts.append(f"{key}: {cleaned}")
-
-            elif isinstance(value, (int, float, bool)):
-                text_parts.append(f"{key}: {value}")
-
-            elif isinstance(value, list):
-                values = [str(v) for v in value if v]
-                if values:
-                    text_parts.append(f"{key}: {', '.join(values)}")
-
-            elif isinstance(value, dict):
-                values = [f"{k}: {v}" for k, v in value.items()]
-                if values:
-                    text_parts.append(f"{key}: {', '.join(values)}")
-
-        combined_text = "\n".join(text_parts).strip()
-
-        if not combined_text:
+        if not flattened:
             return None
+
+        text = "\n".join(flattened)
 
         return {
             "id": str(document.get("_id", "")),
-            "text": combined_text,
+            "text": text,
             "metadata": {
                 "source": "mongodb",
                 "database": self.database_name,
                 "collection": collection_name,
-                "document_id": str(document.get("_id", "")),
+                "document_id": str(document.get("_id", ""))
             }
         }
 
@@ -89,6 +175,7 @@ class MongoDBLoader:
         projection: Optional[Dict] = None,
         limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
+        
         """
         Load and format documents from a single collection.
         """
@@ -135,6 +222,7 @@ class MongoDBLoader:
         filter_query: Optional[Dict] = None,
         limit_per_collection: Optional[int] = None
     ) -> Dict[str, List[Dict[str, Any]]]:
+        
         """
         Load and format documents from multiple collections.
 
@@ -176,6 +264,7 @@ class MongoDBLoader:
         filter_query: Optional[Dict] = None,
         limit_per_collection: Optional[int] = None
     ) -> List[Dict[str, Any]]:
+        
         """
         Load multiple collections and return a single flat list.
         """

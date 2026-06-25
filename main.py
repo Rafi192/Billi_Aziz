@@ -13,13 +13,13 @@ from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 import logging
 
-from chat.chat_history import ChatHistory
-from retriever.retriever import Retriever
+from memory.chat_history import ChatHistory
+from retrievers.retriever import Retriever
 from reranker.reranker import Reranker
 from llm.generator import generate_response
 
 from ingestion.schema import is_casual_query
-from ingestion.load_data import MultiCollectionMongoDBLoader
+from ingestion.load_data import MongoDBLoader
 from ingestion.embedder import get_embedder
 from ingestion.chunker import Chunker
 from ingestion.indexer import MongoDBVectorIndexer
@@ -27,8 +27,8 @@ from ingestion.indexer import MongoDBVectorIndexer
 
 ADMIN_API_KEY    = os.getenv("ADMIN_API_KEY")
 EMBEDDING_MODEL  = "BAAI/bge-base-en-v1.5"
-CHUNK_SIZE       = 100
-CHUNK_OVERLAP    = 10
+CHUNK_SIZE       = 400
+CHUNK_OVERLAP    = 40
 VECTOR_STORE     = "data/vector_store"
 load_dotenv()
 
@@ -61,13 +61,8 @@ def chat(user_id: str = Form(), query: str = Form()):
         # 1. get history FIRST
         history = chat_history.get_history(user_id)
 
-        # 2. rewrite query (IMPORTANT FIX)
-        # clean_query = rewrite_query(query, history)
-
-
         logger.info(f"Original query: {query}")
-        # logger.info(f"Rewritten query: {clean_query}")
-
+        
         # 3. casual handling
         if is_casual_query(query):
             answer = generate_response(
@@ -262,11 +257,11 @@ def reindex(api_key:str = Form()):
         logger.info("Admin reindexing triggered via API")
 
         #1.calling mongoDB multi collection loader
-        loader = MultiCollectionMongoDBLoader(
+        loader = MongoDBLoader(
             connection_string=os.getenv("MONGODB_URI"),
-            database_name=os.getenv("MONGODB_DATABASE")
+            database_name=os.getenv("DB_NAME", "billaziz")
         )
-        formatted_data = loader.load_and_format_all_collections()
+        formatted_data = loader.load_multiple_collections(collection_names=os.getenv("COLLECTION_NAMES").split(","))
         loader.close()
         #handling empty data case
         if not formatted_data:
