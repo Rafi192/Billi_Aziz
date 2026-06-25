@@ -6,7 +6,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from ingestion.load_data import MultiCollectionMongoDBLoader
+from ingestion.load_data import MongoDBLoader
 from ingestion.chunker import Chunker
 from ingestion.embedder import get_embedder
 from ingestion.indexer import MongoDBVectorIndexer
@@ -33,8 +33,8 @@ def main():
     DATABASE_NAME    = os.getenv("MONGODB_DATABASE")
     VECTOR_STORE     = "data/vector_store"
     EMBEDDING_MODEL  = "BAAI/bge-base-en-v1.5"
-    CHUNK_SIZE       = 100
-    CHUNK_OVERLAP    = 10
+    CHUNK_SIZE       = 500
+    CHUNK_OVERLAP    = 50
 
     if not MONGODB_URI:
         print("ERROR: MONGODB_URI not found in .env")
@@ -52,12 +52,12 @@ def main():
     # ── step 1: loading + format ────────────────────────────────────
     print("\n[1] Connecting to MongoDB and loading documents...")
 
-    loader = MultiCollectionMongoDBLoader(
+    loader = MongoDBLoader(
         connection_string=MONGODB_URI,
         database_name=DATABASE_NAME
     )
 
-    available = loader.get_available_collections()
+    available = loader.get_collection_names()
     if not available:
         print("ERROR: No RAG-compatible collections found.")
         print("Check COLLECTION_SCHEMAS in load_data.py")
@@ -66,7 +66,7 @@ def main():
 
     print(f"    Found collections: {', '.join(available)}")
 
-    formatted_data = loader.load_and_format_all_collections()
+    formatted_data = loader.load_multiple_collections_flat()
     loader.close()
 
     if not formatted_data:
