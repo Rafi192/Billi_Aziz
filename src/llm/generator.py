@@ -124,8 +124,8 @@ def _call_llm(
 ) -> str:
 
     if active_model in (
-        LLMProvider.OPENAI,
-        LLMProvider.GROQ
+        LLMProvider.OPENAI
+     
     ):
 
         response = client.chat.completions.create(

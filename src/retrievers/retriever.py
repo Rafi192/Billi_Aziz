@@ -53,7 +53,22 @@ class Retriever:
 
         return True
 
-    def load_all_indexes(self, collection_names: List[str]):
+    def load_all_indexes(self, collection_names: List[str] = None):
+
+        """
+        Load indexes. If collection_names is not provided,
+        auto-discovers all saved indexes from the vector store directory.
+        """
+        if collection_names is None:
+            bin_files = VECTOR_STORE_PATH.glob("*_index.bin")
+            collection_names = [f.stem.replace("_index", "") for f in bin_files]
+
+            if not collection_names:
+                logger.warning(
+                    f"No index files found in {VECTOR_STORE_PATH}. "
+                    "Run /api/admin/reindex first."
+                )
+                return
 
         for collection_name in collection_names:
             self.load_index(collection_name)
@@ -213,6 +228,10 @@ class Retriever:
         # load all indexes if not loaded
         if not self.indexes:
             self.load_all_indexes()
+
+        if not self.indexes:
+            logger.error("No indexes available.")
+            return []
 
         all_results = []
 

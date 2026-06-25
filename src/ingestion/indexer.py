@@ -16,7 +16,7 @@ class MongoDBVectorIndexer:
     def __init__(
         self,
         embedder,
-        vector_store_path: str = "data/vector_store"
+        vector_store_path: str = "src/data/vector_store"
     ):
         self.embedder = embedder
         project_root = Path(__file__).parent.parent
