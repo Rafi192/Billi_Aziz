@@ -1,3 +1,4 @@
 .env
 bill_env/
 __pycache__/
+src/data/

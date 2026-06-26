@@ -13,23 +13,25 @@ from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 import logging
 
-from memory.chat_history import ChatHistory
-from retrievers.retriever import Retriever
-from reranker.reranker import Reranker
-from llm.generator import generate_response
+from src.memory.chat_history import ChatHistory
+from src.retrievers.retriever import Retriever
+from src.reranker.reranker import Reranker
+from src.llm.generator import generate_response
 
-from ingestion.schema import is_casual_query
-from ingestion.load_data import MongoDBLoader
-from ingestion.embedder import get_embedder
-from ingestion.chunker import Chunker
-from ingestion.indexer import MongoDBVectorIndexer
+from src.ingestion.schema import is_casual_query
+from src.ingestion.load_data import MongoDBLoader
+from src.ingestion.embedder import get_embedder
+from src.ingestion.chunker import Chunker
+from src.ingestion.indexer import MongoDBVectorIndexer
 # from llm.query_rewriter import rewrite_query
+from contextlib import asynccontextmanager
 
 ADMIN_API_KEY    = os.getenv("ADMIN_API_KEY")
 EMBEDDING_MODEL  = "BAAI/bge-base-en-v1.5"
 CHUNK_SIZE       = 400
 CHUNK_OVERLAP    = 40
 VECTOR_STORE     = "data/vector_store"
+
 load_dotenv()
 
 logging.basicConfig(
@@ -38,7 +40,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+ADMIN_API_KEY   = os.getenv("ADMIN_API_KEY")
+EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"
+CHUNK_SIZE      = 400
+CHUNK_OVERLAP   = 40
+VECTOR_STORE    = "src/data/vector_store"
+
+# initialise once — shared across all requests
+chat_history = ChatHistory()
+retriever    = Retriever()
+reranker     = Reranker()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("App starting — loading FAISS indexes...")
+    retriever.load_all_indexes()
+    if not retriever.indexes:
+        logger.warning("No FAISS indexes on disk. POST /api/admin/reindex to build them.")
+    else:
+        logger.info(f"Loaded indexes: {list(retriever.indexes.keys())}")
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,7 +85,7 @@ def chat(user_id: str = Form(), query: str = Form()):
         history = chat_history.get_history(user_id)
 
         logger.info(f"Original query: {query}")
-        
+
         # 3. casual handling
         if is_casual_query(query):
             answer = generate_response(
@@ -109,77 +132,6 @@ def chat(user_id: str = Form(), query: str = Form()):
             status_code=500,
             content={"status": False, "error": str(ex)}
         )
-
-# @app.post("/api/chat/")
-# def chat(
-#     user_id: str = Form(),
-#     query:   str = Form()
-# ):
-#     try:
-#         if is_casual_query(query):
-#             answer = generate_response(
-#                 query=query,
-#                 chunks=[],          # empty — no context needed
-#                 chat_history=[]
-#             )
-#             chat_history.add_message(user_id, "user",      query)
-#             chat_history.add_message(user_id, "assistant", answer)
-
-#             return JSONResponse(
-#                 status_code=200,
-#                 content={
-#                     "status":     True,
-#                     "statuscode": 200,
-#                     "text": {
-#                         "user_id": user_id,
-#                         "query":   query,
-#                         "answer":  answer
-#                     }
-#                 }
-#             )
-        
-#         #normal RAG flow for real queries
-#         # 1  get the user's previous history
-#         history = chat_history.get_history(user_id)
-
-#         # 2 — retrieve + rerank
-#         chunks   = retriever.retrieve(query, top_k=10)
-#         reranked = reranker.rerank(query, chunks, top_k=5)
-
-#         # 3 — generate
-#         answer = generate_response(
-#             query=query,
-#             chunks=reranked,
-#             chat_history=history
-#         )
-
-#         # 4 — save both turns
-#         chat_history.add_message(user_id, "user",      query)
-#         chat_history.add_message(user_id, "assistant", answer)
-
-#         return JSONResponse(
-#             status_code=200,
-#             content={
-#                 "status":     True,
-#                 "statuscode": 200,
-#                 "text": {
-#                     "user_id": user_id,
-#                     "query":   query,
-#                     "answer":  answer
-#                 }
-#             }
-#         )
-
-#     except Exception as ex:
-#         logger.exception("Chat endpoint failed")
-#         return JSONResponse(
-#             status_code=500,
-#             content={
-#                 "status":     False,
-#                 "statuscode": 500,
-#                 "text":       str(ex)
-#             }
-#         )
 
 
 @app.delete("/api/chat/clear/")
@@ -242,46 +194,48 @@ def get_history(user_id: str):
         )
 
 @app.post("/api/admin/reindex")
-def reindex(api_key:str = Form()):
+def reindex(api_key: str = Form()):
     try:
-
         if api_key != os.getenv("ADMIN_API_KEY"):
             return JSONResponse(
                 status_code=401,
                 content={
-                    "status":     False,
+                    "status": False,
                     "statuscode": 401,
-                    "text":       "Unauthorized: Invalid API key"
+                    "text": "Unauthorized: Invalid API key"
                 }
             )
+
         logger.info("Admin reindexing triggered via API")
 
-        #1.calling mongoDB multi collection loader
         loader = MongoDBLoader(
             connection_string=os.getenv("MONGODB_URI"),
             database_name=os.getenv("DB_NAME", "billaziz")
         )
-        formatted_data = loader.load_multiple_collections(collection_names=os.getenv("COLLECTION_NAMES").split(","))
+
+        collection_names = loader.get_collection_names()
+        if not collection_names:
+            raise ValueError("No collections found in the database")
+        logger.info(f"Discovered collections: {collection_names}")
+
+        formatted_data = loader.load_multiple_collections(collection_names=collection_names)
         loader.close()
-        #handling empty data case
+
         if not formatted_data:
             logger.error("No data loaded from MongoDB during reindexing")
             return JSONResponse(
                 status_code=500,
                 content={
-                    "status":     False,
+                    "status": False,
                     "statuscode": 500,
-                    "text":       "Reindexing failed: No data loaded from MongoDB"
+                    "text": "Reindexing failed: No data loaded from MongoDB"
                 }
             )
-        
-        #.2. chunking 
+
         chunker = Chunker(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
         chunked_data = chunker.chunk_all_collections(formatted_data)
 
-        # 3. embeddding + index builkdig
         embedder = get_embedder(model_name=EMBEDDING_MODEL)
-
         indexer = MongoDBVectorIndexer(
             embedder=embedder,
             vector_store_path=VECTOR_STORE
@@ -289,33 +243,39 @@ def reindex(api_key:str = Form()):
         indexer.build_all_indexes(chunked_data)
         indexer.save_all_indexes()
 
+        # hot-reload the live retriever
+        retriever.indexes = {}
+        retriever.documents = {}
+        retriever.load_all_indexes()
+        logger.info(f"Retriever hot-reloaded: {list(retriever.indexes.keys())}")
+
         total_docs = sum(len(docs) for docs in formatted_data.values())
         total_chunks = sum(len(chunk) for chunk in chunked_data.values())
-
-        logger.info(f'reindex completed with total docs of {total_docs} and total chunks of {total_chunks} chunks')
+        logger.info(f"Reindex completed: {total_docs} docs, {total_chunks} chunks")
 
         return JSONResponse(
             status_code=200,
             content={
-                "status":True,
-                "statuscode":200,
-                "text":{
+                "status": True,
+                "statuscode": 200,
+                "text": {
                     "total_docs": total_docs,
-                    "total_chunks": total_chunks
+                    "total_chunks": total_chunks,
+                    "collections": collection_names
                 }
             }
         )
-    
+
     except Exception as e:
+        logger.exception("Reindexing failed")
         return JSONResponse(
             status_code=500,
             content={
-                "status":     False,
+                "status": False,
                 "statuscode": 500,
-                "text":       f"Reindexing failed: {str(e)}"
+                "text": f"Reindexing failed: {str(e)}"
             }
         )
-
 
 
 @app.get("/api/health/")
