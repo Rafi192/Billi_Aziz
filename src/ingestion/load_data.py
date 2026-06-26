@@ -167,7 +167,6 @@ class MongoDBLoader:
 
     # Single Collection Loader
 
-
     def load_single_collection(
         self,
         collection_name: str,

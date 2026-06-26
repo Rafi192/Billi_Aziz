@@ -29,17 +29,7 @@ class Reranker:
         chunks: List[Dict[str, Any]],
         top_k: int = 5
     ) -> List[Dict[str, Any]]:
-        """
-        Rerank retrieved chunks by relevance to query.
-
-        Args:
-            query:  User query
-            chunks: Retrieved chunks from retriever.py
-            top_k:  How many to keep after reranking
-
-        Returns:
-            Top-k reranked chunks with rerank_score added
-        """
+     
         if not chunks:
             return []
 
@@ -58,4 +48,10 @@ class Reranker:
 
         final = reranked[:top_k]
         logger.info(f"Reranked {len(chunks)} → kept top {len(final)}")
+        for i, chunk in enumerate(final):
+            logger.info(
+                f"[Reranker] #{i+1} | score={chunk.get('rerank_score', 0):.4f} | "
+                f"collection={chunk.get('metadata', {}).get('collection', 'unknown')} | "
+                f"text_preview={chunk.get('text', '')[:100]}"
+            )
         return final

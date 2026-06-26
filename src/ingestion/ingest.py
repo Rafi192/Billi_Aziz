@@ -30,7 +30,7 @@ def main():
 
     # my configs 
     MONGODB_URI      = os.getenv("MONGODB_URI")
-    DATABASE_NAME    = os.getenv("MONGODB_DATABASE")
+    DATABASE_NAME    = os.getenv("DB_NAME", "billaziz")
     VECTOR_STORE     = "data/vector_store"
     EMBEDDING_MODEL  = "BAAI/bge-base-en-v1.5"
     CHUNK_SIZE       = 500
@@ -41,7 +41,7 @@ def main():
         return
 
     if not DATABASE_NAME:
-        print("ERROR: MONGODB_DATABASE not found in .env")
+        print("ERROR: DB_NAME not found in .env")
         return
 
     print(f"\nDatabase       : {DATABASE_NAME}")
@@ -66,7 +66,7 @@ def main():
 
     print(f"    Found collections: {', '.join(available)}")
 
-    formatted_data = loader.load_multiple_collections_flat()
+    formatted_data = loader.load_multiple_collections(collection_names= available)
     loader.close()
 
     if not formatted_data:
