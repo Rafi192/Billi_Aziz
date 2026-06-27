@@ -79,7 +79,10 @@ reranker     = Reranker()
 
 
 @app.post("/api/chat/")
-def chat( user_id: Optional[str] = Form(), query: str = Form()):
+def chat( user_id: str | None = Form(
+    default=None,
+    examples=[""]
+), query: str = Form()):
     try:
         if not user_id:
             user_id = str(uuid.uuid4())
