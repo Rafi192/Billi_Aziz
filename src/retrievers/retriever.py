@@ -1,5 +1,4 @@
 # retriever/retriever.py
-
 import sys
 from pathlib import Path
 import numpy as np
@@ -11,7 +10,6 @@ from typing import List, Dict, Any, Optional
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-# from retrievers.router import route_query
 from ingestion.embedder import get_embedder
 
 logger = logging.getLogger(__name__)
@@ -55,10 +53,7 @@ class Retriever:
 
     def load_all_indexes(self, collection_names: List[str] = None):
 
-        """
-        Load indexes. If collection_names is not provided,
-        auto-discovers all saved indexes from the vector store directory.
-        """
+     
         if collection_names is None:
             bin_files = VECTOR_STORE_PATH.glob("*_index.bin")
             collection_names = [f.stem.replace("_index", "") for f in bin_files]
@@ -269,16 +264,7 @@ class Retriever:
         top_k: int = 10,
         collection_name: Optional[str] = None
     ):
-        """
-        Convenience wrapper.
-
-        If collection_name is provided:
-            -> single collection retrieval
-
-        Otherwise:
-            -> multi collection retrieval
-        """
-
+  
         if collection_name:
             return self.retrieve_single_collection(
                 query=query,
