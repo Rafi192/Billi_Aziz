@@ -25,6 +25,7 @@ from src.ingestion.chunker import Chunker
 from src.ingestion.indexer import MongoDBVectorIndexer
 # from llm.query_rewriter import rewrite_query
 from contextlib import asynccontextmanager
+from typing import Optional
 
 ADMIN_API_KEY    = os.getenv("ADMIN_API_KEY")
 EMBEDDING_MODEL  = "BAAI/bge-base-en-v1.5"
@@ -44,7 +45,7 @@ ADMIN_API_KEY   = os.getenv("ADMIN_API_KEY")
 EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"
 CHUNK_SIZE      = 400
 CHUNK_OVERLAP   = 40
-VECTOR_STORE    = "src/data/vector_store"
+VECTOR_STORE    = "data/vector_store"
 
 # initialise once — shared across all requests
 chat_history = ChatHistory()
@@ -78,8 +79,10 @@ reranker     = Reranker()
 
 
 @app.post("/api/chat/")
-def chat(user_id: str = Form(), query: str = Form()):
+def chat( user_id: Optional[str] = Form(), query: str = Form()):
     try:
+        if not user_id:
+            user_id = str(uuid.uuid4())
 
         # 1. get history FIRST
         history = chat_history.get_history(user_id)
